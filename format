@@ -1,0 +1,8 @@
+T1: files
+    FileID | Location | etc...
+
+T2: tags
+    TagID | "some tag text" | number of applications
+
+T3: uses
+    useID | FileID | TagID | special
