@@ -1,8 +1,8 @@
 T1: files
-    FileID | Location | etc...
+    FileID | data
 
 T2: tags
-    TagID | "some tag text" | number of applications
+    TagID | "tag" | number of uses | hidden
 
 T3: uses
-    useID | FileID | TagID | special
+    useID | FileID | TagID
