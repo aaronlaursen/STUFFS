@@ -403,6 +403,16 @@ class SpotFS(LoggingMixIn, Operations):
         rmByPath(path,session)
         session.commit()
 
+    def rename(self, old, new):
+        session=Session()
+        tags=getTagsFromPath(new,session)
+        f=getObjByPath(old,session)
+        f.tags=set(tags)
+        session.commit()
+
+    def readlink(self, path):
+        return self.read(path,-1,0,None)
+
 if __name__ == "__main__":
     if len(argv) != 2:
         print('usage: %s <mountpoint> [database]' % argv[0])
