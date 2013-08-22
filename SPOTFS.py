@@ -58,28 +58,32 @@ def mkfile(name, session, mode=0o770, tags=None):
     session.add(f)
     if tags !=None:
         f.tags |= set(tags)
+    now=time()
     a = {'st_mode':(S_IFREG | mode)
                 , 'st_nlink':1
                 , 'st_size':0
-                , 'st_ctime':time()
-                , 'st_mtime':time()
-                , 'st_atime':time()
+                , 'st_ctime':now
+                , 'st_mtime':now
+                , 'st_atime':now
                 , 'uid':0
                 , 'gid':0
                 }
     f.attrs = convertAttr(a)
     f.name=name
+    f.data=bytes()
+    print("****new file tags:", tags)
     return f
 
 def mktag(txt, session, mode=0o777):
     t=Tag(txt)
     session.add(t)
+    now=time()
     a = {'st_mode':(S_IFDIR | mode)
                 , 'st_nlink':1
                 , 'st_size':0
-                , 'st_ctime':time()
-                , 'st_mtime':time()
-                , 'st_atime':time()
+                , 'st_ctime':now
+                , 'st_mtime':now
+                , 'st_atime':now
                 , 'uid':0
                 , 'gid':0
                 }
@@ -156,7 +160,8 @@ def getTagsByFiles(files):
 def getTagsFromPath(path,session):
     print("----------------------")
     print("%"+path+"%")
-    tagnames=set(path.split('/')).discard('')
+    tagnames=set(path.split('/'))
+    tagnames.discard('')
     print(tagnames)
     print("----------------------")
     if type(tagnames)==type(None): return set()
@@ -201,10 +206,14 @@ def getSubByTags(tags,session):
     if len(tags)==0:return genEverything(session)
     subfiles=set(getFilesByTags(tags,session))
     subtags=getTagsByFiles(subfiles)
+    print("{}{}{}{}{}{}{}")
+    print(subfiles,subtags)
+    print("{}{}{}{}{}{}{}")
     return subfiles | subtags
 
 def genSub(path,session):
     tags=getTagsFromPath(path,session)
+    print("\n tags from subpath", path,tags,"\n")
     sub=getSubByTags(tags,session)
     print("############")
     print(sub)
@@ -261,8 +270,10 @@ class SpotFS(LoggingMixIn, Operations):
     def getattr(self, path, fh=None):
         print("getattr:", path, fh)
         session=Session()
-        if path=='/': return {'st_mode':(0o777)
-                , 'st_nlink':1
+        attr=None
+        if path.strip()=='/':
+            attr= {'st_mode':(S_IFDIR | 0o777)
+                , 'st_nlink':2
                 , 'st_size':0
                 , 'st_ctime':time()
                 , 'st_mtime':time()
@@ -270,7 +281,7 @@ class SpotFS(LoggingMixIn, Operations):
                 , 'uid':0
                 , 'gid':0
                 }
-        attr=getAttrByPath(path,session)
+        if not attr: attr=getAttrByPath(path,session)
         print("+++++++++")
         print(attr)
         print("+++++++++")
@@ -288,6 +299,7 @@ class SpotFS(LoggingMixIn, Operations):
         session.commit()
 
     def readdir(self,path,fh=None):
+        print("readdir")
         session=Session()
         if path=='/': return ['.','..']+genDisplayEverything(session)
         return ['.','..']+genSubDisplay(path,session)
@@ -329,6 +341,49 @@ class SpotFS(LoggingMixIn, Operations):
         print("open reached:",path,flags)
         self.fd+=1
         return self.fd
+
+    def read(self,path,size,offset,fh):
+        print("read")
+        session=Session()
+        f=getFileFromPath(path,session)
+        if not f: return ""
+        print(":-:-:",f.data[offset:offset+size])
+        return f.data[offset:offset+size]
+
+    def write(self,path,data,offset,fh):
+        print("write")
+        session=Session()
+        f=getFileFromPath(path,session)
+        if not f: return
+        f.data=f.data[:offset]+data
+        attrs=convertAttr(f.attrs)
+        attrs['st_size']=offset+len(data)
+        f.attrs=convertAttr(attrs)
+        session.commit()
+        return len(data)
+
+    def truncate(self, path, length, fh=None):
+        print("truncate")
+        session=Session()
+        f=getFileFromPath(path,session)
+        if not f: return
+        f.data=f.data[:length]
+        attrs=convertAttr(f.attrs)
+        attrs['st_size']=length
+        f.attrs=convertAttr(attrs)
+        session.commit()
+
+    def utimens(self, path, times=None):
+        now=time()
+        atime, mtime = times if times else (now,now)
+        session=Session()
+        f=getFileFromPath(path,session)
+        if not f: return
+        attrs=convertAttr(f.attrs)
+        attrs['st_atime']=atime
+        attrs['st_mtime']=mtime
+        f.attrs=convertAttr(attrs)
+        session.commit()
 
 
 
