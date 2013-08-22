@@ -262,6 +262,14 @@ def getAttrByPath(path,session):
     if not obj: return None
     return getAttrByObj(obj)
 
+def rmObj(obj,session):
+    session.delete(obj)
+
+def rmByPath(path,session):
+    obj=getObjByPath(path,session)
+    if not obj: return None
+    rmObj(obj,session)
+
 #fuse stuff
 class SpotFS(LoggingMixIn, Operations):
     def __init__(self):
@@ -385,7 +393,15 @@ class SpotFS(LoggingMixIn, Operations):
         f.attrs=convertAttr(attrs)
         session.commit()
 
+    def rmdir(self,path):
+        session=Session()
+        rmByPath(path,session)
+        session.commit()
 
+    def unlink(self, path):
+        session=Session()
+        rmByPath(path,session)
+        session.commit()
 
 if __name__ == "__main__":
     if len(argv) != 2:
