@@ -16,7 +16,7 @@ from errno import ENOENT
 
 
 #database stuff
-DBPATH="fs.db"
+DBPATH="fs.db" if len(argv) >=2 else argv[2]
 db = create_engine('sqlite:///'+DBPATH)
 db.echo = False
 Base = declarative_base(metadata=MetaData(db))
@@ -405,7 +405,7 @@ class SpotFS(LoggingMixIn, Operations):
 
 if __name__ == "__main__":
     if len(argv) != 2:
-        print('usage: %s <mountpoint>' % argv[0])
+        print('usage: %s <mountpoint> [database]' % argv[0])
         exit(1)
     fuse = FUSE(SpotFS(), argv[1], foreground=True)
 
