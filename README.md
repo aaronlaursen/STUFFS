@@ -1,11 +1,11 @@
-spotfs
+STUFFS
 ======
 
 Semantic File-System (Honors project 2013/2014)
 
 Run-as:
 
-./SPOTFS < mountpoint > [database_location]
+./STUFFS < mountpoint > [database_location]
 
 
 Some things to note:
