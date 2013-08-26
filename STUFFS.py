@@ -1,8 +1,5 @@
 #!/usr/bin/python
 
-#spotfs rewrite**2
-
-
 from sqlalchemy import Table, Column, Integer, ForeignKey, BLOB, \
         Boolean, String, create_engine, MetaData
 from sqlalchemy.orm import relationship, backref, sessionmaker
