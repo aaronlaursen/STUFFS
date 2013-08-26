@@ -1,8 +1,8 @@
 T1: files
-    FileID | data
+    FileID | data | attrs | name 
 
 T2: tags
-    TagID | "tag" | number of uses | hidden
+    TagID | name | attrs
 
 T3: uses
     useID | FileID | TagID
