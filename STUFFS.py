@@ -2,7 +2,7 @@
 
 from sqlalchemy import Table, Column, Integer, ForeignKey, BLOB, \
         Boolean, String, create_engine, MetaData
-from sqlalchemy.orm import relationship, backref, sessionmaker
+from sqlalchemy.orm import relationship, backref, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 from time import time
 from stat import S_IFDIR, S_IFLNK, S_IFREG
@@ -13,11 +13,11 @@ from errno import ENOENT
 
 
 #database stuff
-DBPATH="fs.db" if len(argv) >=2 else argv[2]
-db = create_engine('sqlite:///'+DBPATH)
+DBPATH="fs.db" if len(argv) <=2 else argv[2]
+db = create_engine('sqlite:///'+DBPATH,connect_args={'check_same_thread':False})
 db.echo = False
 Base = declarative_base(metadata=MetaData(db))
-Session = sessionmaker(bind=db)
+Session = scoped_session(sessionmaker(bind=db,autoflush=False,autocommit=True,expire_on_commit=False))
 #session=Session()
 
 Table('use'
@@ -25,6 +25,7 @@ Table('use'
     , Column('file_id', Integer, ForeignKey('files.id'))
     , Column('tag_id', Integer, ForeignKey('tags.id'))
 )
+
 
 class File(Base):
     __tablename__ = 'files'
@@ -68,7 +69,7 @@ def mkfile(name, session, mode=0o770, tags=None):
     f.attrs = convertAttr(a)
     f.name=name
     f.data=bytes()
-    print("****new file tags:", tags)
+    #print("****new file tags:", tags)
     return f
 
 def mktag(txt, session, mode=0o777):
@@ -86,6 +87,17 @@ def mktag(txt, session, mode=0o777):
                 }
     t.attrs = convertAttr(a)
     return t
+
+'''
+def getAttrTag(obj, attr, session):
+    q=session.query(Tag).filter(Tag.in_(obj.tags), Tag.name.like("attr::"+attr+"::%") )
+    return q.first()
+
+def setAttrTag(obj, attr, value, session):
+    obj.tags.discard(getAttrTag(obj,attr,session))
+    t=getTagsByTxts("attr::"+attr+"::"+value)
+#'''
+
 
 def convertAttr(attrs):
     attrdata=( ('st_mode',int)
@@ -155,12 +167,12 @@ def getTagsByFiles(files):
     return tags
 
 def getTagsFromPath(path,session):
-    print("----------------------")
-    print("%"+path+"%")
+    #print("----------------------")
+    #print("%"+path+"%")
     tagnames=set(path.split('/'))
     tagnames.discard('')
-    print(tagnames)
-    print("----------------------")
+    #print(tagnames)
+    #print("----------------------")
     if type(tagnames)==type(None): return set()
     if len(tagnames)==0: return set()
     idtags=set()
@@ -203,18 +215,19 @@ def getSubByTags(tags,session):
     if len(tags)==0:return genEverything(session)
     subfiles=set(getFilesByTags(tags,session))
     subtags=getTagsByFiles(subfiles)
-    print("{}{}{}{}{}{}{}")
-    print(subfiles,subtags)
-    print("{}{}{}{}{}{}{}")
+    subtags=subtags-tags
+    #print("{}{}{}{}{}{}{}")
+    #print(subfiles,subtags)
+    #print("{}{}{}{}{}{}{}")
     return subfiles | subtags
 
 def genSub(path,session):
     tags=getTagsFromPath(path,session)
-    print("\n tags from subpath", path,tags,"\n")
+    #print("\n tags from subpath", path,tags,"\n")
     sub=getSubByTags(tags,session)
-    print("############")
-    print(sub)
-    print("############")
+    #print("############")
+    #print(sub)
+    #print("############")
     return sub
 
 def genSubDisplay(path,session):
@@ -228,10 +241,10 @@ def getObjByPath(path,session):
     if path[-1]=='/':
         return getEndTagFromPath(path,session)
     objname=path.split('/')[-1]
-    print("============")
-    print(objname)
-    print(getIdFromString(objname))
-    print("============")
+    #print("============")
+    #print(objname)
+    #print(getIdFromString(objname))
+    #print("============")
     id_, typ = getIdFromString(objname)
     obj = getByID(id_, session,typ)
     if obj: return obj
@@ -247,7 +260,7 @@ def genEverything(session):
     stuff |= set(q.all())
     q=session.query(Tag)
     stuff |= set(q.all())
-    print("------stuff:",stuff)
+    #print("------stuff:",stuff)
     return stuff
 
 def genDisplayEverything(session):
@@ -271,9 +284,10 @@ def rmByPath(path,session):
 class SpotFS(LoggingMixIn, Operations):
     def __init__(self):
         self.fd=0
+        self.session=Session()
 
     def getattr(self, path, fh=None):
-        print("getattr:", path, fh)
+        #print("getattr:", path, fh)
         session=Session()
         attr=None
         if path.strip()=='/':
@@ -287,41 +301,41 @@ class SpotFS(LoggingMixIn, Operations):
                 , 'gid':0
                 }
         if not attr: attr=getAttrByPath(path,session)
-        print("+++++++++")
-        print(attr)
-        print("+++++++++")
+        #print("+++++++++")
+        #print(attr)
+        #print("+++++++++")
         if not attr:
             raise FuseOSError(ENOENT)
         return attr
 
     def mkdir(self,path,mode):
-        session=Session()
+        session=self.session#Session()
         path=path.strip('/')
         path=path.split('/')
         txt=path[-1]
         mktag(txt, session, mode)
+        #session.commit()
         session.flush()
-        session.commit()
 
     def readdir(self,path,fh=None):
-        print("readdir")
-        session=Session()
+        #print("readdir")
+        session=self.session#Session()
         if path=='/': return ['.','..']+genDisplayEverything(session)
         return ['.','..']+genSubDisplay(path,session)
 
     def chmod(self, path, mode):
-        session=Session()
+        session=self.session#Session()
         obj=getObjByPath(path,session)
         if not obj: return
         attrs=convertAttr(obj.attrs)
         attrs['st_mode'] |=mode
         obj.attrs=convertAttr(attrs)
+        #session.commit()
         session.flush()
-        session.commit()
         return 0
 
     def chown(self, path,uid,gid):
-        session=Session()
+        session=self.session#Session()
         obj=getObjByPath(path,session)
         if not obj: return
         attrs=convertAttr(obj.attrs)
@@ -329,89 +343,96 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['gid']=gid
         obj.attrs=convertAttr(attrs)
         session.add(obj)
+        #session.commit()
         session.flush()
-        session.commit()
 
     def create(self,path,mode):
-        print("creat reached:",path,mode)
-        session=Session()
+        #print("creat reached:",path,mode)
+        session=self.session#Session()
         tpath, name = path.rsplit("/",1)
         tags=getTagsFromPath(path,session)
         mkfile(name,session,tags=tags)
-        session.commit()
+        #session.commit()
+        session.flush()
         self.fd +=1
         return self.fd
 
     def open(self,path,flags):
-        print("open reached:",path,flags)
+        #print("open reached:",path,flags)
         self.fd+=1
         return self.fd
 
     def read(self,path,size,offset,fh):
-        print("read")
-        session=Session()
+        #print("read")
+        session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return ""
-        print(":-:-:",f.data[offset:offset+size])
+        #print(":-:-:",f.data[offset:offset+size])
         return f.data[offset:offset+size]
 
     def write(self,path,data,offset,fh):
-        print("write")
-        session=Session()
+        #print("write")
+        session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return
         f.data=f.data[:offset]+data
         attrs=convertAttr(f.attrs)
         attrs['st_size']=offset+len(data)
         f.attrs=convertAttr(attrs)
-        session.commit()
+        #session.commit()
+        session.flush()
         return len(data)
 
     def truncate(self, path, length, fh=None):
-        print("truncate")
-        session=Session()
+        #print("truncate")
+        session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return
         f.data=f.data[:length]
         attrs=convertAttr(f.attrs)
         attrs['st_size']=length
         f.attrs=convertAttr(attrs)
-        session.commit()
+        #session.commit()
+        session.flush()
 
     def utimens(self, path, times=None):
         now=time()
         atime, mtime = times if times else (now,now)
-        session=Session()
+        session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return
         attrs=convertAttr(f.attrs)
         attrs['st_atime']=atime
         attrs['st_mtime']=mtime
         f.attrs=convertAttr(attrs)
-        session.commit()
+        #session.commit()
+        session.flush()
 
     def rmdir(self,path):
-        session=Session()
+        session=self.session#Session()
         rmByPath(path,session)
-        session.commit()
+        #session.commit()
+        session.flush()
 
     def unlink(self, path):
-        session=Session()
+        session=self.session#Session()
         rmByPath(path,session)
-        session.commit()
+        #session.commit()
+        session.flush()
 
     def rename(self, old, new):
-        session=Session()
+        session=self.session#Session()
         tags=getTagsFromPath(new,session)
         f=getObjByPath(old,session)
         f.tags=set(tags)
-        session.commit()
+        #session.commit()
+        session.flush()
 
     def readlink(self, path):
         return self.read(path,-1,0,None)
 
 if __name__ == "__main__":
-    if len(argv) != 2:
+    if len(argv) < 2:
         print('usage: %s <mountpoint> [database]' % argv[0])
         exit(1)
     fuse = FUSE(SpotFS(), argv[1], foreground=True)
