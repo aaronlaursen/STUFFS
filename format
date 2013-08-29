@@ -5,4 +5,7 @@ T2: tags
     TagID | name | attrs
 
 T3: uses
-    useID | FileID | TagID
+    UseID | FileID | TagID
+
+T4: data
+    DatumID | FileID | data_blob

@@ -26,15 +26,24 @@ Table('use'
     , Column('tag_id', Integer, ForeignKey('tags.id'))
 )
 
+class Datum(Base):
+    __tablename__='data'
+    def __init__(self):
+        self.datum=bytes()
+    id = Column(Integer, primary_key=True)
+    datum = Column(BLOB)
+    parent_id = Column(Integer, ForeignKey('files.id'))
 
 class File(Base):
     __tablename__ = 'files'
-    def __init__(self, data=None):
-        self.data=data
+    def __init__(self):
+        pass
     id = Column(Integer, primary_key=True)
-    data = Column(BLOB)
     attrs = Column(String)
     name = Column(String)
+    data = relationship("Datum"
+                    , collection_class=list
+                    )
     tags = relationship("Tag"
                     , secondary="use"
                     , backref=backref("files", collection_class=set)
@@ -68,7 +77,8 @@ def mkfile(name, session, mode=0o770, tags=None):
                 }
     f.attrs = convertAttr(a)
     f.name=name
-    f.data=bytes()
+    addBlock(f,session)
+    #f.data=bytes()
     #print("****new file tags:", tags)
     return f
 
@@ -280,11 +290,25 @@ def rmByPath(path,session):
     if not obj: return None
     rmObj(obj,session)
 
+def addBlock(f,session):
+    block=Datum()
+    session.add(block)
+    f.data.append(block)
+    #block.parent_id=f.id
+    session.flush()
+    return f
+
+def delBlock(f,session):
+    session.delete(f.data.pop())
+    session.flush
+    return f
+
 #fuse stuff
 class SpotFS(LoggingMixIn, Operations):
     def __init__(self):
         self.fd=0
         self.session=Session()
+        self.blocksize=64*1024
 
     def getattr(self, path, fh=None):
         #print("getattr:", path, fh)
@@ -368,27 +392,65 @@ class SpotFS(LoggingMixIn, Operations):
         f=getFileFromPath(path,session)
         if not f: return ""
         #print(":-:-:",f.data[offset:offset+size])
-        return f.data[offset:offset+size]
+        #return f.data[offset:offset+size]
+        data=bytes()
+        blockoffs=offset//self.blocksize
+        offset=offset%self.blocksize
+        while size >0:
+            #print(data)
+            if blockoffs>=len(f.data): break
+            data+=f.data[blockoffs].datum[offset:min(self.blocksize,size+offset)]
+            size-=(self.blocksize-offset)
+            blockoffs+=1
+            offset=0
+            #print("Loop!")
+        #print(len(data))
+        #print(data)
+        #print(data.decode())
+        return data.decode().encode()
 
     def write(self,path,data,offset,fh):
         #print("write")
+        #print(data)
+        #print(type(data))
         session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return
-        f.data=f.data[:offset]+data
+        #f.data=f.data[:offset]+data
+        size=len(data)
         attrs=convertAttr(f.attrs)
-        attrs['st_size']=offset+len(data)
+        attrs['st_size']=offset+size
         f.attrs=convertAttr(attrs)
+        blockoffs=offset//self.blocksize
+        offset=offset%self.blocksize
+        #print("offset:",offset)
+        start=0
+        while start<size:
+            while blockoffs>=len(f.data):
+                f=addBlock(f,session)
+            f.data[blockoffs].datum=f.data[blockoffs].datum[:offset]+data[start:start+min(size-start,self.blocksize-offset)]
+            start+=min(size-start,self.blocksize-offset)
+            offset=0
+            blockoffs+=1
+            #print("loop!")
         #session.commit()
         session.flush()
-        return len(data)
+        #print(size)
+        return size
 
     def truncate(self, path, length, fh=None):
         #print("truncate")
         session=self.session#Session()
         f=getFileFromPath(path,session)
         if not f: return
-        f.data=f.data[:length]
+        #f.data=f.data[:length]
+        numblocks=(length+self.blocksize-1)//self.blocksize
+        while numblocks>len(f.data):
+            f=addBlock(f,session)
+        while numblocks>len(f.data):
+            f=delBlock(f,session)
+        if numblocks>0:
+            f.data[-1].datum=f.data[-1].datum[:length%self.blocksize]
         attrs=convertAttr(f.attrs)
         attrs['st_size']=length
         f.attrs=convertAttr(attrs)
@@ -429,7 +491,7 @@ class SpotFS(LoggingMixIn, Operations):
         session.flush()
 
     def readlink(self, path):
-        return self.read(path,-1,0,None)
+        return self.read(path,float("inf"),0,None)
 
 if __name__ == "__main__":
     if len(argv) < 2:
