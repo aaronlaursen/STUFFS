@@ -13,6 +13,16 @@ from errno import ENOENT
 
 
 #database stuff
+
+from sqlalchemy.engine import Engine
+from sqlalchemy import event
+
+@event.listens_for(Engine, "connect")
+def set_sqlite_pragma(dbapi_connection, connection_record):
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA foreign_keys=ON")
+    cursor.close()
+
 DBPATH="fs.db" if len(argv) <=2 else argv[2]
 db = create_engine('sqlite:///'+DBPATH,connect_args={'check_same_thread':False})
 db.echo = False
@@ -307,7 +317,7 @@ def delBlock(f,session):
 class SpotFS(LoggingMixIn, Operations):
     def __init__(self):
         self.fd=0
-        self.session=Session()
+        #self.session=Session()
         self.blocksize=64*1024
 
     def getattr(self, path, fh=None):
@@ -333,7 +343,7 @@ class SpotFS(LoggingMixIn, Operations):
         return attr
 
     def mkdir(self,path,mode):
-        session=self.session#Session()
+        session=Session()
         path=path.strip('/')
         path=path.split('/')
         txt=path[-1]
@@ -342,12 +352,12 @@ class SpotFS(LoggingMixIn, Operations):
 
     def readdir(self,path,fh=None):
         #print("readdir")
-        session=self.session#Session()
+        session=Session()
         if path=='/': return ['.','..']+genDisplayEverything(session)
         return ['.','..']+genSubDisplay(path,session)
 
     def chmod(self, path, mode):
-        session=self.session#Session()
+        session=Session()
         obj=getObjByPath(path,session)
         if not obj: return
         attrs=convertAttr(obj.attrs)
@@ -357,7 +367,7 @@ class SpotFS(LoggingMixIn, Operations):
         return 0
 
     def chown(self, path,uid,gid):
-        session=self.session#Session()
+        session=Session()
         obj=getObjByPath(path,session)
         if not obj: return
         attrs=convertAttr(obj.attrs)
@@ -369,7 +379,7 @@ class SpotFS(LoggingMixIn, Operations):
 
     def create(self,path,mode):
         #print("creat reached:",path,mode)
-        session=self.session#Session()
+        session=Session()
         tpath, name = path.rsplit("/",1)
         tags=getTagsFromPath(path,session)
         mkfile(name,session,tags=tags)
@@ -384,7 +394,7 @@ class SpotFS(LoggingMixIn, Operations):
 
     def read(self,path,size,offset,fh):
         #print("read")
-        session=self.session#Session()
+        session=Session()
         f=getFileFromPath(path,session)
         if not f: return ""
         #print(":-:-:",f.data[offset:offset+size])
@@ -409,7 +419,7 @@ class SpotFS(LoggingMixIn, Operations):
         #print("write")
         #print(data)
         #print(type(data))
-        session=self.session#Session()
+        session=Session()
         f=getFileFromPath(path,session)
         if not f: return
         #f.data=f.data[:offset]+data
@@ -435,7 +445,7 @@ class SpotFS(LoggingMixIn, Operations):
 
     def truncate(self, path, length, fh=None):
         #print("truncate")
-        session=self.session#Session()
+        session=Session()
         f=getFileFromPath(path,session)
         if not f: return
         #f.data=f.data[:length]
@@ -454,7 +464,7 @@ class SpotFS(LoggingMixIn, Operations):
     def utimens(self, path, times=None):
         now=time()
         atime, mtime = times if times else (now,now)
-        session=self.session#Session()
+        session=Session()
         f=getFileFromPath(path,session)
         if not f: return
         attrs=convertAttr(f.attrs)
@@ -464,17 +474,17 @@ class SpotFS(LoggingMixIn, Operations):
         session.commit()
 
     def rmdir(self,path):
-        session=self.session#Session()
+        session=Session()
         rmByPath(path,session)
         session.commit()
 
     def unlink(self, path):
-        session=self.session#Session()
+        session=Session()
         rmByPath(path,session)
         session.commit()
 
     def rename(self, old, new):
-        session=self.session#Session()
+        session=Session()
         tags=getTagsFromPath(new,session)
         f=getObjByPath(old,session)
         f.tags=set(tags)
