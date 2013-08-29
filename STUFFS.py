@@ -17,7 +17,7 @@ DBPATH="fs.db" if len(argv) <=2 else argv[2]
 db = create_engine('sqlite:///'+DBPATH,connect_args={'check_same_thread':False})
 db.echo = False
 Base = declarative_base(metadata=MetaData(db))
-Session = scoped_session(sessionmaker(bind=db,autoflush=False,autocommit=True,expire_on_commit=False))
+Session = scoped_session(sessionmaker(bind=db))
 #session=Session()
 
 Table('use'
@@ -31,8 +31,8 @@ class Datum(Base):
     def __init__(self):
         self.datum=bytes()
     id = Column(Integer, primary_key=True)
-    datum = Column(BLOB)
     parent_id = Column(Integer, ForeignKey('files.id'))
+    datum = Column(BLOB)
 
 class File(Base):
     __tablename__ = 'files'
@@ -338,8 +338,7 @@ class SpotFS(LoggingMixIn, Operations):
         path=path.split('/')
         txt=path[-1]
         mktag(txt, session, mode)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def readdir(self,path,fh=None):
         #print("readdir")
@@ -354,8 +353,7 @@ class SpotFS(LoggingMixIn, Operations):
         attrs=convertAttr(obj.attrs)
         attrs['st_mode'] |=mode
         obj.attrs=convertAttr(attrs)
-        #session.commit()
-        session.flush()
+        session.commit()
         return 0
 
     def chown(self, path,uid,gid):
@@ -367,8 +365,7 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['gid']=gid
         obj.attrs=convertAttr(attrs)
         session.add(obj)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def create(self,path,mode):
         #print("creat reached:",path,mode)
@@ -376,8 +373,7 @@ class SpotFS(LoggingMixIn, Operations):
         tpath, name = path.rsplit("/",1)
         tags=getTagsFromPath(path,session)
         mkfile(name,session,tags=tags)
-        #session.commit()
-        session.flush()
+        session.commit()
         self.fd +=1
         return self.fd
 
@@ -433,8 +429,7 @@ class SpotFS(LoggingMixIn, Operations):
             offset=0
             blockoffs+=1
             #print("loop!")
-        #session.commit()
-        session.flush()
+        session.commit()
         #print(size)
         return size
 
@@ -454,8 +449,7 @@ class SpotFS(LoggingMixIn, Operations):
         attrs=convertAttr(f.attrs)
         attrs['st_size']=length
         f.attrs=convertAttr(attrs)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def utimens(self, path, times=None):
         now=time()
@@ -467,28 +461,24 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['st_atime']=atime
         attrs['st_mtime']=mtime
         f.attrs=convertAttr(attrs)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def rmdir(self,path):
         session=self.session#Session()
         rmByPath(path,session)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def unlink(self, path):
         session=self.session#Session()
         rmByPath(path,session)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def rename(self, old, new):
         session=self.session#Session()
         tags=getTagsFromPath(new,session)
         f=getObjByPath(old,session)
         f.tags=set(tags)
-        #session.commit()
-        session.flush()
+        session.commit()
 
     def readlink(self, path):
         return self.read(path,float("inf"),0,None)
