@@ -12,11 +12,7 @@ depends=('python sqlite python-sqlalchemy python-fusepy-git')
 makedepends=('git')
 conflicts=()
 provides=()
-# The git repo is detected by the 'git:' or 'git+' bedginning. The branch
-# 'pacman41' is then checked out upon cloning, expediating versioning:
-#source=('git+https://github.com/falconindy/expac.git'
-source=('git://github.com/aaronlaursen/${_gitname}.git')
-# Because the sources are not static, skip Git checksum:
+source=('git://github.com/aaronlaursen/STUFFS.git')
 md5sums=('SKIP')
 
 pkgver() {
