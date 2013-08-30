@@ -62,8 +62,6 @@ view everything tagged as "mytag"
 
 etc...
 
-
-
 Some things to note:
 --------------------
 
@@ -76,6 +74,7 @@ where "9876" is an internal ID, and `touch myfile;ls` may output "myfile@8360@"
 
  - This also means that something pointing to "/file@47@" will allways point to 
 "file@47@" regardless of what you tag it as...
+
 
 License, reuse, etc.
 --------------------
@@ -113,3 +112,4 @@ FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY SPECIAL, DIRECT, INDIREC
 CONSEQUENTIAL DAMAGES OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, 
 DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS 
 ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
