@@ -22,8 +22,6 @@ pkgver() {
 }
 
 build() {
-  cd $_gitname
-  make
 }
 
 package() {
