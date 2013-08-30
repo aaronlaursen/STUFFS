@@ -21,11 +21,8 @@ pkgver() {
   git describe --always | sed 's|-|.|g'
 }
 
-build() {
-}
-
 package() {
   cd $_gitname
-  install -D "$srcdir/STUFFS.py" "$pkgdir/usr/bin/STUFFS.py"
-  install -D "$srcdir/README.md" "$pkgdir/usr/share/STUFFS/README.md"
+  install -D "STUFFS.py" "$pkgdir/usr/bin/STUFFS.py"
+  install -D "README.md" "$pkgdir/usr/share/STUFFS/README.md"
 }
