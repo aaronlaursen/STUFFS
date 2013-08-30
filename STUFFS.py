@@ -1,4 +1,43 @@
-#!/usr/bin/python
+#!/usr/bin/python -OO
+
+#License, reuse, etc.
+#--------------------
+#
+#This software was originally written by Aaron Laursen <aaronlaursen@gmail.com>.
+#
+#This software is licensed under the ISC (Internet Systems Consortium) 
+#license. The specifics terms are below, and pretty much any reasonable use. 
+#If you, for some reason, need it in a different licence, send me an email, 
+#and we'll see what I can do. 
+#
+#However, the author would appreciate but does not require (except as 
+#permitted by the ISC license):
+#
+#- Notification (by email preferably <aaronlaursen@gmail.com>) of use in
+#products, whether open-source or commercial. 
+#
+#- Contribution of patches or pull requests in the case of
+#  improvements/modifications
+#
+#- Credit in documentation, source, etc. especially in the case of 
+#  large-scale projects making heavy use of this software.
+#
+#### ISC license
+#
+#Copyright (c) 2013, Aaron Laursen <aaronlaursen@gmail.com>
+#
+#Permission to use, copy, modify, and/or distribute this software for any 
+#purpose with or without fee is hereby granted, provided that the above 
+#copyright notice and this permission notice appear in all copies.
+#
+#THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES 
+#WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF 
+#MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR 
+#ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES 
+#WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN 
+#ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF 
+#OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
 
 from sqlalchemy import Table, Column, Integer, ForeignKey, BLOB, \
         Boolean, String, create_engine, MetaData
@@ -17,16 +56,20 @@ from errno import ENOENT
 from sqlalchemy.engine import Engine
 from sqlalchemy import event
 
+#'''
 @event.listens_for(Engine, "connect")
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute('PRAGMA synchronous=OFF')
-    cursor.execute('PRAGMA temp_store = MEMORY;')
+    cursor.execute('PRAGMA count_changes=OFF;')
+    #cursor.execute('PRAGMA mmap_size=268435456;')
     cursor.close()
+#'''
 
 DBPATH="fs.db" if len(argv) <=2 else argv[2]
 db = create_engine('sqlite:///'+DBPATH,connect_args={'check_same_thread':False})
+#db = create_engine('mysql+oursql://root:password@127.0.0.1/fsdb')
 db.echo = False
 Base = declarative_base(metadata=MetaData(db))
 Session = scoped_session(sessionmaker(bind=db))
@@ -307,12 +350,12 @@ def addBlock(f,session):
     session.add(block)
     f.data.append(block)
     #block.parent_id=f.id
-    session.flush()
+    #session.flush()
     return f
 
 def delBlock(f,session):
     session.delete(f.data.pop())
-    session.flush
+    #session.flush()
     return f
 
 #fuse stuff
@@ -320,7 +363,7 @@ class SpotFS(LoggingMixIn, Operations):
     def __init__(self):
         self.fd=0
         #self.session=Session()
-        self.blocksize=64*1024
+        self.blocksize=4*1024
 
     def getattr(self, path, fh=None):
         #print("getattr:", path, fh)
@@ -351,6 +394,7 @@ class SpotFS(LoggingMixIn, Operations):
         txt=path[-1]
         mktag(txt, session, mode)
         session.commit()
+        Session.remove()
 
     def readdir(self,path,fh=None):
         #print("readdir")
@@ -366,6 +410,7 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['st_mode'] |=mode
         obj.attrs=convertAttr(attrs)
         session.commit()
+        Session.remove()
         return 0
 
     def chown(self, path,uid,gid):
@@ -378,6 +423,7 @@ class SpotFS(LoggingMixIn, Operations):
         obj.attrs=convertAttr(attrs)
         session.add(obj)
         session.commit()
+        Session.remove()
 
     def create(self,path,mode):
         #print("creat reached:",path,mode)
@@ -386,6 +432,7 @@ class SpotFS(LoggingMixIn, Operations):
         tags=getTagsFromPath(path,session)
         mkfile(name,session,tags=tags)
         session.commit()
+        Session.remove()
         self.fd +=1
         return self.fd
 
@@ -415,7 +462,7 @@ class SpotFS(LoggingMixIn, Operations):
         #print(len(data))
         #print(data)
         #print(data.decode())
-        return data.decode().encode()
+        return data
 
     def write(self,path,data,offset,fh):
         #print("write")
@@ -442,6 +489,7 @@ class SpotFS(LoggingMixIn, Operations):
             blockoffs+=1
             #print("loop!")
         session.commit()
+        Session.remove()
         #print(size)
         return size
 
@@ -462,6 +510,7 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['st_size']=length
         f.attrs=convertAttr(attrs)
         session.commit()
+        Session.remove()
 
     def utimens(self, path, times=None):
         now=time()
@@ -474,23 +523,27 @@ class SpotFS(LoggingMixIn, Operations):
         attrs['st_mtime']=mtime
         f.attrs=convertAttr(attrs)
         session.commit()
+        Session.remove()
 
     def rmdir(self,path):
         session=Session()
         rmByPath(path,session)
         session.commit()
+        Session.remove()
 
     def unlink(self, path):
         session=Session()
         rmByPath(path,session)
         session.commit()
+        Session.remove()
 
     def rename(self, old, new):
         session=Session()
         tags=getTagsFromPath(new,session)
         f=getObjByPath(old,session)
-        f.tags=set(tags)
+        f.tags|=set(tags)
         session.commit()
+        Session.remove()
 
     def readlink(self, path):
         return self.read(path,float("inf"),0,None)
