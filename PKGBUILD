@@ -1,6 +1,6 @@
 # Contributor: Aaron Laursen <aaronlaursen@gmail.com>
 
-pkgname=STUFFS-git
+pkgname=stuffs-git
 _gitname=STUFFS
 pkgver=0.0.0
 pkgrel=1
