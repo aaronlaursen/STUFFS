@@ -52,9 +52,17 @@ add a tag:
 
     mv myfile mytag/
 
-set all tags:
+delete a tag:
+
+    rmdir mytag/
+
+add tags:
 
     mv myfile /mytag/mytag2/mytag3
+
+remove tags (depending on the shell, the ! may need to be escaped):
+
+    mv myfile /!mytag
 
 view everything tagged as "mytag"
 

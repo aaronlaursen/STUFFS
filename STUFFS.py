@@ -379,6 +379,10 @@ class SpotFS(LoggingMixIn, Operations):
                 , 'uid':0
                 , 'gid':0
                 }
+        pieces=path.rsplit("/",1)
+        if len(pieces)>0 and len(pieces[-1])>0 and pieces[-1][0]=='!': 
+            pieces[-1]=pieces[-1][1:]
+            path='/'.join(pieces)
         if not attr: attr=getAttrByPath(path,session)
         #print("+++++++++")
         #print(attr)
@@ -539,8 +543,22 @@ class SpotFS(LoggingMixIn, Operations):
 
     def rename(self, old, new):
         session=Session()
+        pieces=set(new.split('/'))
+        npieces=set()
+        for p in pieces:
+            if len(p)<2:continue
+            if p[0]=='!':
+                npieces.add(p)
+        pieces-=npieces
+        npieces=list(npieces)
+        for i in range(len(npieces)):
+            npieces[i]=npieces[i][1:]
+        new='/'+'/'.join(pieces)
+        nnew='/'+'/'.join(npieces)
         tags=getTagsFromPath(new,session)
+        ntags=getTagsFromPath(nnew,session)
         f=getObjByPath(old,session)
+        f.tags-=set(ntags)
         f.tags|=set(tags)
         session.commit()
         Session.remove()
