@@ -37,6 +37,14 @@ Requirements:
 
 -FUSEpy
 
+Layout:
+-------
+
+All tags show up in the root directory. All files in the system can be found in `/ALLFILES`.
+Under every tag combination, one can found all files tagged with the
+intersection of the tags in the path, as well as any tag not in the path which
+is applied to at least one of the files in the path.
+
 How to use:
 -----------
 
@@ -77,8 +85,8 @@ Some things to note:
 where "9876" is an internal ID, and `touch myfile;ls` may output "myfile@8360@"
 
  - On the plus side, this means that you don't need the full path, so 
-"/tag1%907%/tag2%5267%/tag3%83%/file@47@", "/tag1%907%/file@47@", "/file@47@", 
-"/someTagThatDoesntEvenExist/file@47@" all point to the same "file@47@".
+"/tag1%907%/tag2%5267%/tag3%83%/file@47@", "/tag1%907%/file@47@", and 
+"/file@47@", all point to the same "file@47@".
 
  - This also means that something pointing to "/file@47@" will allways point to 
 "file@47@" regardless of what you tag it as...

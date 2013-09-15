@@ -260,6 +260,7 @@ def getEndTagFromPath(path,session):
     return getTagsByTxts(tagname,session)[0]
 
 def getFileByNameAndTags(name,tags,session):
+    #print(tags)
     q=session.query(File).filter(File.name==name)
     for t in tags:
         q=q.filter(File.tags.contains(t))
@@ -310,7 +311,11 @@ def getObjByPath(path,session):
     #print(objname)
     #print(getIdFromString(objname))
     #print("============")
+    obj=None
     id_, typ = getIdFromString(objname)
+    if typ == File and len(path.split('/'))>2 and 'ALLFILES' not in path.split('/'):
+        obj = getFileByNameAndTags(objname.rsplit('@',2)[0],getTagsFromPath(path,session),session)
+        return obj
     obj = getByID(id_, session,typ)
     if obj: return obj
     pathpieces=path.rsplit('/',1)
@@ -328,8 +333,24 @@ def genEverything(session):
     #print("------stuff:",stuff)
     return stuff
 
+def genAllTags(session):
+    stuff=set(session.query(Tag).all())
+    return stuff
+
+def genAllFiles(session):
+    stuff=set(session.query(File).all())
+    return stuff
+
 def genDisplayEverything(session):
     stuff=genEverything(session)
+    return [genDisplayName(obj) for obj in stuff]
+
+def genDisplayAllTags(session):
+    stuff=genAllTags(session)
+    return [genDisplayName(obj) for obj in stuff]
+
+def genDisplayAllFiles(session):
+    stuff=genAllFiles(session)
     return [genDisplayName(obj) for obj in stuff]
 
 def getAttrByPath(path,session):
@@ -369,7 +390,8 @@ class SpotFS(LoggingMixIn, Operations):
         #print("getattr:", path, fh)
         session=Session()
         attr=None
-        if path.strip()=='/':
+        if path.strip()=='/' or path.split('/')[-1]=='ALLFILES' \
+            or (path.split('/')[-2]=='ALLFILES' and path.split('/')[-1]==''):
             attr= {'st_mode':(S_IFDIR | 0o777)
                 , 'st_nlink':2
                 , 'st_size':0
@@ -403,7 +425,11 @@ class SpotFS(LoggingMixIn, Operations):
     def readdir(self,path,fh=None):
         #print("readdir")
         session=Session()
-        if path=='/': return ['.','..']+genDisplayEverything(session)
+        #if path=='/': return ['.','..']+genDisplayEverything(session)
+        if path=='/': return ['.','..']+genDisplayAllTags(session)+['ALLFILES']
+        if 'ALLFILES' == path.split('/')[-1] or \
+            ('ALLFILES'==path.split('/')[-2] and ''==path.split('/')[-1]):
+            return ['.','..']+genDisplayAllFiles(session)
         return ['.','..']+genSubDisplay(path,session)
 
     def chmod(self, path, mode):
