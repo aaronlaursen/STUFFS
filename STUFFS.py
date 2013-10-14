@@ -192,6 +192,11 @@ def getSimTerms(term):
                 terms.add(name)
     return terms
 
+def getSimTagsFromTerm(term,session):
+    terms=getSimTerms(term)
+    tags=getTagsByTxts(set(terms),session)
+    return tags
+
 def getSimTags(tag,session):
     terms = getSimTerms(tag.name)
     tags=getTagsByTxts(terms,session)
@@ -306,12 +311,14 @@ def getTagsFromPath_logical(path,session):
         elif elem[0]==elem[-1]=="?":
             e=elem[1:-1]
             neg=False
-            if elem[1]=="!":
+            if e[0]=="!":
                 e=e[1:]
                 neg=True
-            t=getTagsByTxts(set([elem[1:-1]]),session)
-            if len(t)==0: continue
-            simt=getSimTags(t[0],session)
+            #t=getTagsByTxts(set([elem[1:-1]]),session)
+            #if len(t)==0: continue
+            #simt=getSimTags(t[0],session)
+            if len(e)<1: continue
+            simt=getSimTagsFromTerm(e,session)
             if not neg: parts[2].append([simt,set()])
             else: parts[2].append([set(),simt])
         elif elem[0]=="!" and len(elem)>1: parts[1].add(elem[1:])
