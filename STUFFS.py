@@ -44,11 +44,13 @@ from sqlalchemy import Table, Column, Integer, ForeignKey, BLOB, \
 from sqlalchemy.orm import relationship, backref, sessionmaker, scoped_session
 from sqlalchemy.ext.declarative import declarative_base
 from time import time
+from sqlalchemy.dialects.mysql import VARCHAR, TEXT
 from stat import S_IFDIR, S_IFLNK, S_IFREG
 from hashlib import md5
 from fuse import Operations, LoggingMixIn, FUSE, FuseOSError
 from sys import argv
 from errno import ENOENT
+from nltk.corpus import wordnet
 
 
 #database stuff
@@ -69,7 +71,8 @@ def set_sqlite_pragma(dbapi_connection, connection_record):
 
 DBPATH="fs.db" if len(argv) <=2 else argv[2]
 db = create_engine('sqlite:///'+DBPATH,connect_args={'check_same_thread':False})
-#db = create_engine('mysql+oursql://root:password@127.0.0.1/fsdb')
+#db = create_engine('sqlite:////tmp/stuffs.db')
+#db = create_engine('mysql+oursql://stuffs:stuffs@localhost/stuffs_db')
 db.echo = False
 Base = declarative_base(metadata=MetaData(db))
 Session = scoped_session(sessionmaker(bind=db))
@@ -77,25 +80,37 @@ Session = scoped_session(sessionmaker(bind=db))
 
 Table('use'
     , Base.metadata
-    , Column('file_id', Integer, ForeignKey('files.id'))
-    , Column('tag_id', Integer, ForeignKey('tags.id'))
+    , Column('file_id', Integer, ForeignKey('files.id'), index=True)
+    #, Column('tag_id', Integer, ForeignKey('tags.id'), index=True)
+    , Column('tag_name', Integer, ForeignKey('tags.name'), index=True)
+    #, mysql_engine = "InnoDB"
+    #, mysql_charset= "utf8"
 )
 
 class Datum(Base):
     __tablename__='data'
+    #__table_args__={
+    #        'mysql_engine':'InnoDB'
+    #        ,'mysql_charset':'utf8'
+    #        }
     def __init__(self):
         self.datum=bytes()
     id = Column(Integer, primary_key=True)
-    parent_id = Column(Integer, ForeignKey('files.id'))
-    datum = Column(BLOB)
+    parent_id = Column(Integer, ForeignKey('files.id'), index=True)
+    datum = Column(BLOB(length=4*1024))
 
 class File(Base):
     __tablename__ = 'files'
+    #__table_args__={
+    #        'mysql_engine':'InnoDB'
+    #        ,'mysql_charset':'utf8'
+    #        }
     def __init__(self):
         pass
     id = Column(Integer, primary_key=True)
-    attrs = Column(String)
-    name = Column(String)
+    #attrs = Column(String)
+    attrs = Column(String(length=512))
+    name = Column(String(length=256), index=True)
     data = relationship("Datum"
                     , collection_class=list
                     )
@@ -109,9 +124,9 @@ class Tag(Base):
     __tablename__ = 'tags'
     def __init__(self, txt):
         self.name=txt
-    id = Column(Integer, primary_key=True)
-    name = Column(String, nullable=False, unique=True)
-    attrs = Column(String)
+    #id = Column(Integer, primary_key=True)
+    name = Column(String(length=256), primary_key=True)#nullable=False, unique=True, index=True)
+    attrs = Column(String(length=512))
 
 Base.metadata.create_all()
 
@@ -163,6 +178,24 @@ def setAttrTag(obj, attr, value, session):
     t=getTagsByTxts("attr::"+attr+"::"+value)
 #'''
 
+def getSimTerms(term):
+    t = wordnet.synsets(term)
+    terms=set()
+    for syn in t:
+        for name in syn.lemma_names:
+            terms.add(name)
+        for hypo in syn.hyponyms():
+            for name in hypo.lemma_names:
+                terms.add(name)
+        for hyper in syn.hypernyms():
+            for name in hyper.lemma_names:
+                terms.add(name)
+    return terms
+
+def getSimTags(tag,session):
+    terms = getSimTerms(tag.name)
+    tags=getTagsByTxts(terms,session)
+    return tags
 
 def convertAttr(attrs):
     attrdata=( ('st_mode',int)
@@ -202,10 +235,10 @@ def genDisplayName(obj):
     if obj.__tablename__=='files':
         name=obj.name
         s='@'
+        name += s + str(obj.id) +s
     elif obj.__tablename__=='tags':
         name=obj.name
         s='%'
-    name += s + str(obj.id) +s
     return name
 
 def getByID(id_, session, typ=File):
@@ -216,6 +249,28 @@ def getFilesByTags(tags,session):
     for t in tags:
         q=q.filter(File.tags.contains(t))
     return q.all()
+
+def getFilesByLogicalTags(tags,session):
+    if len(tags[0])+len(tags[1])+len(tags[2]) ==0: return None
+    q=session.query(File)
+    for t in tags[0]:
+        q=q.filter(File.tags.contains(t))
+    for t in tags[1]:
+        q=q.filter(~File.tags.contains(t))
+    #for op in tags[2]:
+    #    q=q.filter(File.tags.isdisjoint(op[0]))
+    #    q=q.filter(~File.tags.isdisjoint(op[1]))
+    if len(tags[2])==0: return q.all()
+    #t=set(q.all())
+    t=set()
+    for op in tags[2]:
+        for i in op[0]:
+            s=set(q.filter(File.tags.contains(i)).all())
+            t|=s
+        for i in op[1]:
+            s=set(q.filter(~File.tags.contains(i)).all())
+            t|=s
+    return t
 
 def getTagsByTxts(txts,session):
     q=session.query(Tag).filter(Tag.name.in_(txts))
@@ -230,6 +285,40 @@ def getTagsByFiles(files):
     for f in files:
         tags |= f.tags
     return tags
+
+def getTagsFromPath_logical(path,session):
+    elems=set(path.split('/'))
+    elems.discard('')
+    parts=[set(),set(),[]] #[need,not,opt]
+    if len(elems)==0: return parts
+    for elem in elems:
+        #or case
+        if elem[0]=="%" and elem[-1]=="%":
+            opts = elem[1:-1].split("%")
+            p=set()
+            n=set()
+            for opt in opts:
+                if opt[0]=="!" and len(opt)>1: n.add(opt[1:])
+                else: p.add(opt)
+            p=getTagsByTxts(p,session)
+            n=getTagsByTxts(n,session)
+            parts[2].append([p,n])
+        elif elem[0]==elem[-1]=="?":
+            e=elem[1:-1]
+            neg=False
+            if elem[1]=="!":
+                e=e[1:]
+                neg=True
+            t=getTagsByTxts(set([elem[1:-1]]),session)
+            if len(t)==0: continue
+            simt=getSimTags(t[0],session)
+            if not neg: parts[2].append([simt,set()])
+            else: parts[2].append([set(),simt])
+        elif elem[0]=="!" and len(elem)>1: parts[1].add(elem[1:])
+        else: parts[0].add(elem)
+    parts[0]=set(getTagsByTxts(parts[0],session))
+    parts[1]=set(getTagsByTxts(parts[1],session))
+    return parts
 
 def getTagsFromPath(path,session):
     #print("----------------------")
@@ -261,10 +350,32 @@ def getEndTagFromPath(path,session):
 
 def getFileByNameAndTags(name,tags,session):
     #print(tags)
+    if len(tags)==0:return None
     q=session.query(File).filter(File.name==name)
     for t in tags:
         q=q.filter(File.tags.contains(t))
     return q.first()
+
+def getFileByNameAndLogicalTags(name,tags,session):
+    if len(tags[0])+len(tags[1])+len(tags[2]) ==0: return None
+    q=session.query(File).filter(File.name==name)
+    for t in tags[0]:
+        q=q.filter(File.tags.contains(t))
+    for t in tags[1]:
+        q=q.filter(~File.tags.contains(t))
+    #for op in tags[2]:
+    #    q=q.filter(File.tags.isdisjoint(op[0]))
+    #    q=q.filter(~File.tags.isdisjoint(op[1]))
+    #return q.first()
+    if len(tags[2])==0: return q.first()
+    for op in tags[2]:
+        for i in op[0]:
+            s=q.filter(File.tags.contains(i)).first()
+            if s: return s
+        for i in op[1]:
+            s=q.filter(~File.tags.contains(i)).first()
+            if s: return s
+    return None
 
 def getFileFromPath(path,session):
     path=path.strip('/')
@@ -273,18 +384,26 @@ def getFileFromPath(path,session):
     fid,typ=getIdFromString(fstring)
     f=getByID(fid, session, File)
     if f: return f
+    if len(pieces) < 2: return None
     path = ""
     for p in pieces[:-1]: path +=p+"/"
-    return getFileByNameAndTags(fstring,getTagsFromPath(path,session),session)
+    return getFileByNameAndLogicalTags(fstring,getTagsFromPath_logical(path,session),session)
 
 def getSubByTags(tags,session):
-    if len(tags)==0:return genEverything(session)
+    if len(tags)==0:return genAllTags(session)
     subfiles=set(getFilesByTags(tags,session))
     subtags=getTagsByFiles(subfiles)
     subtags=subtags-tags
     #print("{}{}{}{}{}{}{}")
     #print(subfiles,subtags)
     #print("{}{}{}{}{}{}{}")
+    return subfiles | subtags
+
+def getSubByTags_logical(tags,session):
+    if len(tags[0])+len(tags[1])+len(tags[2])==0:return genAllTags(session)
+    subfiles=set(getFilesByLogicalTags(tags,session))
+    subtags=getTagsByFiles(subfiles)
+    subtags=subtags-tags[0]-tags[1]
     return subfiles | subtags
 
 def genSub(path,session):
@@ -296,8 +415,17 @@ def genSub(path,session):
     #print("############")
     return sub
 
+def genSubLogical(path,session):
+    tags=getTagsFromPath_logical(path,session)
+    sub=getSubByTags_logical(tags,session)
+    return sub
+
 def genSubDisplay(path,session):
     sub=genSub(path,session)
+    return [genDisplayName(x) for x in sub]
+
+def genSubDisplayLogical(path,session):
+    sub=genSubLogical(path,session)
     return [genDisplayName(x) for x in sub]
 
 def getAttrByObj(obj):
@@ -313,15 +441,21 @@ def getObjByPath(path,session):
     #print("============")
     obj=None
     id_, typ = getIdFromString(objname)
-    if typ == File and len(path.split('/'))>2 and 'ALLFILES' not in path.split('/'):
-        obj = getFileByNameAndTags(objname.rsplit('@',2)[0],getTagsFromPath(path,session),session)
-        return obj
     obj = getByID(id_, session,typ)
     if obj: return obj
     pathpieces=path.rsplit('/',1)
-    opts=genSub(pathpieces[0]+'/',session)
+    opts=genSubLogical(pathpieces[0]+'/',session)
+    if pathpieces[1][0]==pathpieces[1][-1]=="%":
+        ors=set(pathpieces[1].split("%"))
+        ors.discard('')
+        ors=set(getTagsByTxts(ors, session))
+        if len(ors)>=1 and not ors.isdisjoint(opts): return list(ors.intersection(opts))[0]
     for o in opts:
         if o.name==pathpieces[1]: return o
+        if "!"==pathpieces[1][0] and o.name==pathpieces[1][1:]: return o
+    if typ == File and len(path.split('/'))>2 and 'ALLFILES' not in path.split('/'):
+        obj = getFileByNameAndLogicalTags(objname.rsplit('@',2)[0],getTagsFromPath_logical(path,session),session)
+        return obj
     return getFileFromPath(path,session)
 
 def genEverything(session):
@@ -391,7 +525,8 @@ class SpotFS(LoggingMixIn, Operations):
         session=Session()
         attr=None
         if path.strip()=='/' or path.split('/')[-1]=='ALLFILES' \
-            or (path.split('/')[-2]=='ALLFILES' and path.split('/')[-1]==''):
+            or (path.split('/')[-2]=='ALLFILES' and path.split('/')[-1]=='') \
+            or (path.split("/")[-1][0]==path.split("/")[-1][-1]=="?"):
             attr= {'st_mode':(S_IFDIR | 0o777)
                 , 'st_nlink':2
                 , 'st_size':0
@@ -402,10 +537,11 @@ class SpotFS(LoggingMixIn, Operations):
                 , 'gid':0
                 }
         pieces=path.rsplit("/",1)
-        if len(pieces)>0 and len(pieces[-1])>0 and pieces[-1][0]=='!': 
+        if len(pieces)>0 and len(pieces[-1])>0 and pieces[-1][0]=='!':
             pieces[-1]=pieces[-1][1:]
             path='/'.join(pieces)
-        if not attr: attr=getAttrByPath(path,session)
+        if not attr:
+            attr=getAttrByPath(path,session)
         #print("+++++++++")
         #print(attr)
         #print("+++++++++")
@@ -430,7 +566,7 @@ class SpotFS(LoggingMixIn, Operations):
         if 'ALLFILES' == path.split('/')[-1] or \
             ('ALLFILES'==path.split('/')[-2] and ''==path.split('/')[-1]):
             return ['.','..']+genDisplayAllFiles(session)
-        return ['.','..']+genSubDisplay(path,session)
+        return ['.','..']+genSubDisplayLogical(path,session)
 
     def chmod(self, path, mode):
         session=Session()
@@ -459,7 +595,7 @@ class SpotFS(LoggingMixIn, Operations):
         #print("creat reached:",path,mode)
         session=Session()
         tpath, name = path.rsplit("/",1)
-        tags=getTagsFromPath(path,session)
+        tags=getTagsFromPath_logical(path,session)[0]
         mkfile(name,session,tags=tags)
         session.commit()
         Session.remove()
@@ -569,7 +705,8 @@ class SpotFS(LoggingMixIn, Operations):
 
     def rename(self, old, new):
         session=Session()
-        pieces=set(new.split('/'))
+        #pieces=set(new.split('/')[:-1])
+        '''
         npieces=set()
         for p in pieces:
             if len(p)<2:continue
@@ -583,9 +720,11 @@ class SpotFS(LoggingMixIn, Operations):
         nnew='/'+'/'.join(npieces)
         tags=getTagsFromPath(new,session)
         ntags=getTagsFromPath(nnew,session)
+        '''
+        tags=getTagsFromPath_logical(new,session)
         f=getObjByPath(old,session)
-        f.tags-=set(ntags)
-        f.tags|=set(tags)
+        f.tags-=set(tags[1])
+        f.tags|=set(tags[0])
         session.commit()
         Session.remove()
 
