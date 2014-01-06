@@ -6,7 +6,7 @@
 #This software was originally written by Aaron Laursen <aaronlaursen@gmail.com>.
 #
 #This software is licensed under the ISC (Internet Systems Consortium) 
-#license. The specifics terms are below, and pretty much any reasonable use. 
+#license. The specific terms below for allow pretty much any reasonable use. 
 #If you, for some reason, need it in a different licence, send me an email, 
 #and we'll see what I can do. 
 #
