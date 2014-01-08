@@ -82,7 +82,7 @@ Table('use'
     , Base.metadata
     , Column('file_id', Integer, ForeignKey('files.id'), index=True)
     #, Column('tag_id', Integer, ForeignKey('tags.id'), index=True)
-    , Column('tag_name', Integer, ForeignKey('tags.name'), index=True)
+    , Column('tag_name', String, ForeignKey('tags.name'), index=True)
     #, mysql_engine = "InnoDB"
     #, mysql_charset= "utf8"
 )
