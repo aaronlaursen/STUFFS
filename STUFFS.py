@@ -63,7 +63,7 @@ from sqlalchemy import event
 def set_sqlite_pragma(dbapi_connection, connection_record):
     cursor = dbapi_connection.cursor()
     cursor.execute("PRAGMA foreign_keys=ON")
-    #cursor.execute('PRAGMA synchronous=OFF')
+    cursor.execute('PRAGMA synchronous=OFF')
     cursor.execute('PRAGMA count_changes=OFF;')
     #cursor.execute('PRAGMA mmap_size=268435456;')
     cursor.close()
