@@ -309,6 +309,7 @@ def getTagsFromPath_logical(path,session):
             n=getTagsByTxts(n,session)
             parts[2].append([p,n])
         elif elem[0]==elem[-1]=="?":
+            print("asdf")
             e=elem[1:-1]
             neg=False
             if e[0]=="!":
@@ -321,6 +322,7 @@ def getTagsFromPath_logical(path,session):
             simt=getSimTagsFromTerm(e,session)
             if not neg: parts[2].append([simt,set()])
             else: parts[2].append([set(),simt])
+            print(simt)
         elif elem[0]=="!" and len(elem)>1: parts[1].add(elem[1:])
         else: parts[0].add(elem)
     parts[0]=set(getTagsByTxts(parts[0],session))
@@ -521,7 +523,7 @@ def delBlock(f,session):
     return f
 
 #fuse stuff
-class SpotFS(LoggingMixIn, Operations):
+class STUFFS(LoggingMixIn, Operations):
     def __init__(self):
         self.fd=0
         #self.session=Session()
@@ -742,5 +744,5 @@ if __name__ == "__main__":
     if len(argv) < 2:
         print('usage: %s <mountpoint> [database]' % argv[0])
         exit(1)
-    fuse = FUSE(SpotFS(), argv[1], foreground=True)
+    fuse = FUSE(STUFFS(), argv[1], foreground=True)
 
