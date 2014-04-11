@@ -182,13 +182,13 @@ def getSimTerms(term):
     t = wordnet.synsets(term)
     terms=set()
     for syn in t:
-        for name in syn.lemma_names:
+        for name in syn.lemma_names():
             terms.add(name)
         for hypo in syn.hyponyms():
-            for name in hypo.lemma_names:
+            for name in hypo.lemma_names():
                 terms.add(name)
         for hyper in syn.hypernyms():
-            for name in hyper.lemma_names:
+            for name in hyper.lemma_names():
                 terms.add(name)
     return terms
 
