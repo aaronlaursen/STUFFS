@@ -1,6 +1,6 @@
 STUFFS
 ======
-Aaron Laursen <aaronlaursen@gmail.com>
+Aaron Laursen
 
 a Semantically-Tagged, Unorganized, Future File-System: STUFFS
 ---------------------------------------------------------------
